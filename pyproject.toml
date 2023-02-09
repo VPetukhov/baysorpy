@@ -1,6 +1,7 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 
 [project]
 name = "baysorpy"
@@ -25,11 +26,11 @@ dependencies = [
     "tqdm",
     "scikit-learn>=0.22",
     "joblib",
+    "juliacall",
     "umap-learn>=0.3.10",
-    "pytorch>=1.12",
+    # "pytorch>=1.12",
     "pytorch-lightning>=1.8.0"
 ]
-dynamic = ["version"]
 
 [project.urls]
 "Homepage" = "https://github.com/vpetukhov/baysorpy"
