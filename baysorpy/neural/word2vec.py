@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import sparse
 import pandas as pd
+from typing import List, Optional
 
 import torch
 from torch import nn
@@ -115,3 +116,13 @@ class Word2Vec(pl.LightningModule):
         loss = self.forward(*batch)
         self.log("loss", loss)
         return loss
+
+    def get_embeddings(self, numpy: bool = True, gene_names: Optional[List[str]] = None):
+        embs = self.embeddings_target(torch.arange(self.hparams.vocab_size)).detach()
+        if numpy:
+            embs = embs.numpy()
+
+        if gene_names is not None:
+            embs = pd.DataFrame(embs, index=gene_names)
+
+        return embs

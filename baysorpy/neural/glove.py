@@ -154,7 +154,7 @@ class TorchGloVe(TorchModelBase):
         """
         return TorchGloVeModel(self.n_words, self.embed_dim)
 
-    def fit(self, X):
+    def fit(self, X, word_weights=None):
         """
         Prepares `X` to permit learning against the GloVe objective,
         and then uses the superclass `fit` method to train the model
@@ -189,6 +189,9 @@ class TorchGloVe(TorchModelBase):
         # to the full count matrix:
         bounded = np.minimum(X_vals, self.xmax)
         weights = (bounded / self.xmax)**self.alpha
+        if word_weights is not None:
+            weights *= word_weights
+
         # Precompute log X[i, j] for all i, j:
         X_log = log_of_array_ignoring_zeros(X_vals)
         super().fit(X_log, weights)

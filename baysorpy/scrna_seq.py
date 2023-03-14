@@ -3,8 +3,11 @@ from pandas import DataFrame
 import numpy as np
 import scanpy as sc
 
-def extract_markers_per_type(adata: sc.AnnData, annotation_col: str, append_specificity_metrics: bool = True, top_k: int = 50) -> DataFrame:
-    if 'rank_genes_groups' not in adata.uns:
+def extract_markers_per_type(
+        adata: sc.AnnData, annotation_col: str, append_specificity_metrics: bool = True,
+        top_k: int = 50, force: bool = True
+    ) -> DataFrame:
+    if force or ('rank_genes_groups' not in adata.uns):
         sc.tl.rank_genes_groups(adata, annotation_col, method='wilcoxon')
 
     markers_per_type = DataFrame(adata.uns['rank_genes_groups']['names'][:top_k])
