@@ -44,7 +44,7 @@ def estimate_confidence(df_spatial:DataFrame, nn_id:int, prior_assignment:List[i
     return np.array(conf)
 
 
-def neighborhood_count_matrix_jl(
+def _neighborhood_count_matrix_jl(
         pos_data: np.ndarray, gene_ids: np.ndarray, k: int, normalize: bool = False, n_genes: int = None, **kwargs
     ):
     from juliacall import Main as jl
