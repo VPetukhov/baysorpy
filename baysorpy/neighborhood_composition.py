@@ -202,6 +202,7 @@ def embedding_to_color(embedding: np.array, space: str = "orgb", **kwargs):
     Args:
         embedding: 3D embedding of shape (n_molecules, 3)
         space: Color space to use as an intermediate representation. One of ['orgb', 'lab']
+               'orgb' is less perceptionally uniform, but gives more accurate representation of the original embedding
         **kwargs: Additional arguments to pass to the color space conversion function
     """
     if space == "orgb":
