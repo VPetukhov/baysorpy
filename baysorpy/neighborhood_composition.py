@@ -90,6 +90,32 @@ def estimate_gene_vectors(
     return gene_emb
 
 
+def estimate_molecule_vectors(
+        neighb_mat, embedding_size: int, var_clip: float = 0.05, pca: bool = True, return_gene_vectors: bool = False
+    ):
+    """
+    Estimate low-dimensioanl molecule vectors from the neighborhood count matrix using Random Indexing algorithm.
+
+    Args:
+        neighb_mat: Neighborhood count matrix of shape (n_cells, n_genes)
+        embedding_size: Number of dimensions to embed genes into (30-50 is recommended)
+        var_clip: Fraction of variance to clip from the diagonal of the covariance matrix (improves convergence)
+        pca: Whether to apply PCA to the output vectors. PCA leads to more interpretable dimensions, ordered by their variance.
+        return_gene_vectors: Whether to return gene vectors as well
+    """
+    ri_size = embedding_size if not pca else (2 * embedding_size)
+    gene_emb = estimate_gene_vectors(neighb_mat, embedding_size=ri_size, var_clip=var_clip)
+    mol_vectors = neighb_mat.dot(gene_emb)
+
+    if pca:
+        mol_vectors = PCA(n_components=embedding_size).fit_transform(mol_vectors)
+
+    if return_gene_vectors:
+        return mol_vectors, gene_emb
+
+    return mol_vectors
+
+
 ## Embedding to colors
 
 LC1C2_TO_RGB = np.matrix([
