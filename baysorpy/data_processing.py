@@ -1,3 +1,5 @@
+from typing import List, Optional
+import numpy as np
 import pandas as pd
 
 def read_spatial_df(data_path:str, x_col:str="x", y_col:str="y", z_col:str="z", gene_col:str="gene", filter_cols:bool=False, min_molecules_per_gene:int=0):
@@ -38,3 +40,32 @@ def read_spatial_df(data_path:str, x_col:str="x", y_col:str="y", z_col:str="z", 
 #     df_spatial[!, :y] = Array{Float64, 1}(df_spatial[!, :y])
 #     df_spatial[!, :gene], gene_names = encode_genes(df_spatial[!, :gene]);
 #     return df_spatial, gene_names;
+
+
+def staining_value_per_point(pos_data: np.ndarray, img: np.ndarray, columns: Optional[List[str]]=None):
+    """
+    Extracts the staining value for each point in pos_data from the image img.
+
+    Parameters
+    ----------
+    pos_data : np.ndarray
+        Array of shape (N, 2) or (N, 3) containing the x, y, and z coordinates of each point.
+    img : np.ndarray
+        Image array of shape (W, H, C) or (W, H) where W is the width, H is the height, and C is the number of channels.
+    columns : Optional[List[str]], optional
+        List of channel names in the image, by default None. If provided, the output will be a pandas DataFrame with the columns named accordingly.
+    """
+    assert pos_data.shape[1] in (2, 3), "pos_data must have either 2 or 3 columns"
+    if len(img.shape) == 3:
+        if pos_data.shape[1] == 3:
+            stain_vals = img[pos_data[:,2].astype(int), pos_data[:,1].astype(int), pos_data[:,0].astype(int)].T
+        else:
+            stain_vals = img[:, pos_data[:,1].astype(int), pos_data[:,0].astype(int)].T
+            if columns is not None:
+                stain_vals = pd.DataFrame(stain_vals, columns=columns)
+    elif len(img.shape) == 2:
+        stain_vals = img[pos_data[:,1].astype(int), pos_data[:,0].astype(int)].T
+    else:
+        raise ValueError("img must have either 2 or 3 dimensions")
+
+    return stain_vals
