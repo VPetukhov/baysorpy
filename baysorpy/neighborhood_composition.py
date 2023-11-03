@@ -1,5 +1,8 @@
 from sklearn.neighbors import kneighbors_graph
 from sklearn.decomposition import PCA
+from sklearn.manifold import MDS
+from sklearn.base import BaseEstimator
+from umap import ParametricUMAP
 from collections import Counter
 from pandas import Series, DataFrame
 from scipy import sparse
@@ -114,6 +117,47 @@ def estimate_molecule_vectors(
         return mol_vectors, gene_emb
 
     return mol_vectors
+
+
+def estimate_molecule_colors(
+        neighb_mat, embedding_size: int = 30, use_gene_vectors: bool = True,
+        estimator: BaseEstimator = None, train_size: int = 50000, **kwargs
+    ):
+    """
+    Estimate molecule colors from the neighborhood count matrix.
+
+    Args:
+        neighb_mat: Neighborhood count matrix of shape (n_cells, n_genes)
+        embedding_size: Number of dimensions to embed genes into (30-50 is recommended)
+        use_gene_vectors: If True, the method embeds gene vectors first and then project molecules onto them.
+                          If False, the method embeds molecule vectors directly. Embedding gene vectors is much faster,
+                          but in some (rare) cases may lead to worse results.
+        estimator: Estimator to use for embedding of gene or molecule vectors.
+                   By default, ParametricUMAP is used for molecule vectors and MDS for gene vectors.
+                   *For molecules, the estimator must have `fit` and `transform` methods. For genes, only `fit_transform` method.
+        train_size: Number of molecules to use for training the estimator for molecule vector embedding. If 0, all molecules are used.
+        **kwargs: Additional arguments to pass to the color space conversion function
+    """
+
+    mol_vectors, gene_vectors = estimate_molecule_vectors(neighb_mat, embedding_size=embedding_size, return_gene_vectors=True)
+
+    if use_gene_vectors:
+        estimator = estimator or MDS(n_components=3, n_jobs=-1, normalized_stress="auto")
+        gene_emb = estimator.fit_transform(gene_vectors)
+        mol_emb = neighb_mat.dot(gene_emb)
+    else:
+        estimator = estimator or ParametricUMAP(n_components=3)
+        # select ids uniformly across the first two PCs:
+        if (train_size > 0) & (train_size < mol_vectors.shape[0]):
+            train_ids = np.argsort(mol_vectors[:,:2].sum(axis=1))[np.linspace(0, mol_vectors.shape[0] - 1, train_size, dtype=int)]
+            train_set = mol_vectors[train_ids,:]
+        else:
+            train_set = mol_vectors
+
+        estimator.fit(train_set)
+        mol_emb = estimator.transform(mol_vectors)
+
+    return embedding_to_color(mol_emb, **kwargs)
 
 
 ## Embedding to colors
