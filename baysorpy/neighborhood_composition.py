@@ -33,6 +33,7 @@ def _neighborhood_count_matrix_py(
 def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int, method='py', **kwargs):
     """
     Compute the neighborhood count matrix for a given set of spatial coordinates and gene ids.
+
     Args:
         pos_data: Spatial coordinates of cells (2-3D numpy array of shape (n_molecules, n_dims))
         gene_ids: Gene ids of cells (1D numpy array of shape (n_molecules,))
@@ -49,12 +50,21 @@ def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int
 
 
 def estimate_gene_vectors(
-        neighb_mat, gene_ids: np.ndarray, embedding_size: int, gene_names: Optional[List[str]] = None,
-        var_clip: float = 0.95, random_vectors_init=None
+        neighb_mat, embedding_size: int, gene_names: Optional[List[str]] = None,
+        var_clip: float = 0.05, random_vectors_init=None
     ):
-    n_genes = gene_ids.max() + 1
+    """
+    Estimate low-dimensioanl gene vectors from the neighborhood count matrix using Random Indexing algorithm.
+
+    Args:
+        neighb_mat: Neighborhood count matrix of shape (n_cells, n_genes)
+        embedding_size: Number of dimensions to embed genes into (30-50 is recommended)
+        gene_names: Gene names. If provided, the output is a DataFrame with gene names as index. (1D numpy array of shape (n_molecules,))
+        var_clip: Fraction of variance to clip from the diagonal of the covariance matrix (improves convergence)
+        random_vectors_init: Random vectors to initialize the embedding with (mostly used for dev purposes)
+    """
     if random_vectors_init is None: # mostly used for dev purposes
-        random_vectors_init = np.random.normal(size=(n_genes, embedding_size))
+        random_vectors_init = np.random.normal(size=(neighb_mat.shape[1], embedding_size))
 
     coexpr_mat = neighb_mat.T.dot(neighb_mat)
     if not isinstance(coexpr_mat, np.ndarray):
@@ -72,8 +82,7 @@ def estimate_gene_vectors(
             diag_vals
         )
 
-    init_cov = np.random.normal(size=(coexpr_mat.shape[0], embedding_size))
-    gene_emb = (coexpr_mat.dot(init_cov).T / coexpr_mat.sum(axis=1)).T
+    gene_emb = (coexpr_mat.dot(random_vectors_init).T / coexpr_mat.sum(axis=1)).T
 
     if gene_names is not None:
         gene_emb = DataFrame(gene_emb, index=gene_names)
@@ -163,6 +172,11 @@ def embedding_to_color(embedding: np.array, space: str = "orgb", **kwargs):
     """
     Converts an arbitrary 3D `embedding` into a set of RGB colors
     using color space `space` as an intermediate representation.
+
+    Args:
+        embedding: 3D embedding of shape (n_molecules, 3)
+        space: Color space to use as an intermediate representation. One of ['orgb', 'lab']
+        **kwargs: Additional arguments to pass to the color space conversion function
     """
     if space == "orgb":
         return _embedding_to_orgb(embedding, **kwargs)
