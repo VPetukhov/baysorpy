@@ -48,23 +48,37 @@ def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int
     raise ValueError(f"Method {method} not found. Please choose from ['py', 'jl']")
 
 
-def estimate_gene_vectors(neighb_mat, gene_ids: np.ndarray, embedding_size: int, gene_names: Optional[List[str]] = None, random_vectors_init=None):
+def estimate_gene_vectors(
+        neighb_mat, gene_ids: np.ndarray, embedding_size: int, gene_names: Optional[List[str]] = None,
+        var_clip: float = 0.95, random_vectors_init=None
+    ):
     n_genes = gene_ids.max() + 1
-    if random_vectors_init is None:
+    if random_vectors_init is None: # mostly used for dev purposes
         random_vectors_init = np.random.normal(size=(n_genes, embedding_size))
-    n_nns_in_mat = neighb_mat.sum(axis=1)[0,0]
 
-    ids_by_gene = Series(np.arange(gene_ids.size)).groupby(gene_ids).apply(lambda x: np.array(list(x)))
+    coexpr_mat = neighb_mat.T.dot(neighb_mat)
+    if not isinstance(coexpr_mat, np.ndarray):
+        coexpr_mat = coexpr_mat.A
 
-    rnm_mat = neighb_mat.dot(random_vectors_init) / n_nns_in_mat
-    random_embedding = np.concatenate(list(
-        ids_by_gene.apply(lambda ids: np.atleast_2d(rnm_mat[ids,:].mean(axis=0)))
-    ), axis=0)
+    if var_clip > 0:
+        # Genes that mostly co-variate with themselves don't get updated by other genes
+        # Som we clip their covariance, which greatly improves convergence
+        diag_vals = np.diag(coexpr_mat)
+        total_var = coexpr_mat.sum(axis=0)
+        diag_frac = diag_vals / total_var
+
+        coexpr_mat[np.diag_indices_from(coexpr_mat)] = np.minimum(
+            (np.quantile(diag_frac, 1 - var_clip) * total_var).astype(int),
+            diag_vals
+        )
+
+    init_cov = np.random.normal(size=(coexpr_mat.shape[0], embedding_size))
+    gene_emb = (coexpr_mat.dot(init_cov).T / coexpr_mat.sum(axis=1)).T
 
     if gene_names is not None:
-        random_embedding = DataFrame(random_embedding, index=gene_names)
+        gene_emb = DataFrame(gene_emb, index=gene_names)
 
-    return random_embedding
+    return gene_emb
 
 
 ## Embedding to colors
