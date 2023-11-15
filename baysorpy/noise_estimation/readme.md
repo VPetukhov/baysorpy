@@ -8,7 +8,7 @@ After compiling, run
 python _test_noise_estimation.py
 ```
 
-If all the test passed, you can further use the library for your tasks. A usage example:
+If all the test passed, you can further use the library for your tasks. Usage example:
 
 ```
 from noise_estimation import fit_noise_probabilities, cython_bincount, build_molecule_graph
