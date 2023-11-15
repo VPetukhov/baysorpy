@@ -10,7 +10,7 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 
 ext_modules=[
-    Extension("build_molecule_graph",       ["build_molecule_graph.pyx"]),
+    Extension("noise_estimation",       ["noise_estimation.pyx"]),
 ]
 
 setup(
