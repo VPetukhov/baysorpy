@@ -3,25 +3,19 @@ import tqdm
 cimport numpy as np
 from scipy.stats import norm
 from sklearn.neighbors import KDTree
-from libc.math cimport exp, sqrt
-# Typing declarations
 cimport cython
 cimport numpy as cnp
-import os
-from cython.parallel import prange
-import numpy as np
+from libc.math cimport exp, sqrt, M_PI
+from libc.math cimport log, pow
 from libc.stdlib cimport malloc, free
 from libc.stdint cimport int64_t
-from libc.stdio cimport printf
-import os
-import numpy as np
-from scipy.spatial import Delaunay
-import sklearn
-import scipy
+
+
 from sklearn.metrics.pairwise import euclidean_distances
-from libc.math cimport exp, sqrt, M_PI
-from libc.math cimport exp, log, sqrt, pow
-from cython.parallel import prange
+import os
+from scipy.spatial import Delaunay
+import scipy
+
 np.set_printoptions(precision=5)
 np.set_printoptions(suppress=True)
 
@@ -431,7 +425,7 @@ def fit_noise_probabilities(edge_lengths, adj_list, min_confidence=None, max_ite
 def estimate_confidence(df_spatial, nn_id, prior_assignment=None, prior_confidence=0.5):
     pos_data = position_data(df_spatial).T
     tree = KDTree(pos_data.T)
-    dists, indices = tree.query(pos_data.T, k=nn_id + 1, sort_results=True)
+    dists, _ = tree.query(pos_data.T, k=nn_id + 1, sort_results=True)
     mean_dists = dists[:, nn_id]
    
     if prior_assignment is not None:
