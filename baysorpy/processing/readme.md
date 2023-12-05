@@ -2,8 +2,11 @@ To compile Cython program:
 ```
 python setup.py build_ext -i 
 ```
-To estimate confidence or clusters, use the following imports
-Note: first, you need to compile the cython part before importing the libraries. If the error "module X not found", you need to run setup.py first.
+To estimate confidence or clusters, use the following imports.
+
+
+Note: first, you need to compile the cython part before importing the modules. If the error "module X not found", you need to run setup.py first.
+
 ```
 from processing.molecule_clustering import estimate_molecule_clusters
 from processing.noise_estimation import estimate_confidence
