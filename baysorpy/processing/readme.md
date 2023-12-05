@@ -2,18 +2,12 @@ To compile Cython program:
 ```
 python setup.py build_ext -i 
 ```
-
-After compiling, run 
+To estimate confidence or clusters, use the following imports
+Note: first, you need to compile the cython part before importing the libraries. If the error "module X not found", you need to run setup.py first.
 ```
-python _test_noise_estimation.py
-```
-
-If all the test passed, you can further use the library for your tasks. Usage example:
-
-```
-from noise_estimation import fit_noise_probabilities, cython_bincount, build_molecule_graph
+from processing.molecule_clustering import estimate_molecule_clusters
+from processing.noise_estimation import estimate_confidence
 ```
 
-If you modify the original .pyx code, please make sure that the tests are passed. 
-
+A usage example can be accessed by running ```simple_test_mol_clust.ipynb```. You have to adjust your ```test_data_path``` to a spatial dataset containing x,y,z coordinates.
 
