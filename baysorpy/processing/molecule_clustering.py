@@ -1,28 +1,32 @@
 import numpy as np
-import copy
+
 from sklearn.decomposition import FastICA
 from scipy.stats import norm
 from math import log, pi, exp
 from typing import Union, List
 from typing import Optional, List, Union
 from noise_estimation import AdjList, build_molecule_graph
-from molecule_clustering_cython import cluster_molecules_loop, maximize_molecule_clusters
+from molecule_clustering_cython import cluster_molecules_on_mrf_alt
+
+import sys
+sys.path.append('../')
+from neighborhood_composition import neighborhood_count_matrix, estimate_molecule_vectors
 
 np.random.seed(42)
 
-# Equivalent to Julia's FNormal struct
-class FNormal:
-    def __init__(self, mu: float, sigma: float):
-        self.mu = mu
-        self.sigma = sigma
-        self.c = -0.5 * log(2 * pi) - log(sigma)
-        self.s = 0.5 / sigma**2
+# # Equivalent to Julia's FNormal struct
+# class FNormal:
+#     def __init__(self, mu: float, sigma: float):
+#         self.mu = mu
+#         self.sigma = sigma
+#         self.c = -0.5 * log(2 * pi) - log(sigma)
+#         self.s = 0.5 / sigma**2
 
-# Equivalent to Julia's NormalComponent struct
-class NormalComponent:
-    def __init__(self, dists: List[FNormal], n: float):
-        self.dists = dists
-        self.n = n
+# # Equivalent to Julia's NormalComponent struct
+# class NormalComponent:
+#     def __init__(self, dists: List[FNormal], n: float):
+#         self.dists = dists
+#         self.n = n
 
 # # Function to replace normal_logpdf
 # def normal_logpdf(n: FNormal, v: float) -> float:
@@ -163,131 +167,17 @@ def cluster_molecules_on_mrf(df_spatial, adj_list, n_clusters, confidence_thresh
     #     except Exception as e:
     #         print("ICA did not converge, falling back to random initialization.\n")
     #         ct_exprs_init = None
-    
     genes = np.array(df_spatial['gene'])
     confidence = np.array(df_spatial['confidence'])
+    if kwargs['method'] == 'normal':
+        pos_data = position_data(df_spatial)
+        ncm_mat = neighborhood_count_matrix(pos_data, genes, n_clusters)
+        genes = estimate_molecule_vectors(ncm_mat, 1)
+        print('kek')
     if ct_exprs_init is not None:
         ct_exprs_init = ct_exprs_init.T
-
+    print('end')
     return cluster_molecules_on_mrf_alt(genes, adj_list, confidence, components=ct_exprs_init, n_clusters=n_clusters, **kwargs)
-
-def init_cell_type_exprs(
-    genes: np.ndarray,
-    cell_type_exprs: Optional[Union[np.ndarray, None]] = None,
-    assignment: Optional[np.ndarray] = None,
-    n_clusters: int = 1,
-    init_mod: int = 10000
-) -> np.ndarray:
-    if cell_type_exprs is not None:
-        return copy.deepcopy(cell_type_exprs)
-
-    if n_clusters <= 1:
-        if assignment is None:
-            raise ValueError("Either n_clusters, assignment, or cell_type_exprs must be specified")
-        n_clusters = np.max(assignment)
-
-    if init_mod < 0:
-        # Assuming `prob_array` is a function defined elsewhere
-        cell_type_exprs = np.concatenate(
-            [prob_array(genes == i, max_value=np.max(genes)) for i in range(1, n_clusters + 1)], axis=1
-        ).T
-    else:
-        gene_probs = np.array(prob_array(genes))  # Assuming `prob_array` is a function defined elsewhere
-        noise = np.concatenate([[hash_64_64(x1 * (x2 ** 2)) for x2 in range(1, n_clusters+1)] for x1 in range(1, len(gene_probs)+1)]).reshape(gene_probs.shape[0], n_clusters) % init_mod / 100000
-        cell_type_exprs = (gene_probs[:, np.newaxis].T * (0.95 + noise.T))
-    
-    cell_type_exprs = (cell_type_exprs + 1) / (np.sum(cell_type_exprs, axis=1, keepdims=True) + 1)
-    return cell_type_exprs
-
-def init_assignment_probs_inner(genes, cell_type_exprs):
-    return cell_type_exprs[:, genes]
-
-def init_assignment_probs(assignment):
-    assignment_probs = np.zeros((np.max(np.array(assignment)[~np.isnan(assignment)]), len(assignment)))
-
-    for i, a in enumerate(assignment):
-        if a is None:
-            assignment_probs[:, i] = 1 / assignment_probs.shape[0]
-        else:
-            assignment_probs[a - 1, i] = 1.0
-
-    return assignment_probs
-
-def init_assignment_probs_alt(genes, cell_type_exprs, assignment=None, assignment_probs=None):
-    if assignment_probs is not None:
-        return np.copy(assignment_probs)
-
-    if assignment is not None:
-        return init_assignment_probs(assignment)
-
-    assignment_probs = init_assignment_probs_inner(genes, cell_type_exprs)
-
-    col_sum = np.sum(assignment_probs, axis=0)
-    assignment_probs[:, col_sum < 1e-10] = 1 / assignment_probs.shape[0]
-
-    assignment_probs /= np.sum(assignment_probs, axis=0)
-
-    return assignment_probs
-
-def init_categorical_mixture(genes, cell_type_exprs=None, assignment=None, assignment_probs=None, n_clusters=1, init_mod=10000):
-    cell_type_exprs = init_cell_type_exprs(genes, cell_type_exprs, assignment, n_clusters=n_clusters, init_mod=init_mod)
-    
-    assignment_probs = init_assignment_probs_alt(genes, cell_type_exprs, assignment=assignment, assignment_probs=assignment_probs)
-
-    return cell_type_exprs, assignment_probs
-
-def init_normal_cluster_mixture(gene_vectors, confidence, assignment, assignment_probs=None):
-    if assignment_probs is None:
-        assignment_probs = init_assignment_probs(assignment)
-    
-    components = [NormalComponent([FNormal(0.0, 1.0) for _ in range(gene_vectors.shape[1])]) for _ in range(assignment_probs.shape[0])]
-    maximize_molecule_clusters(components, gene_vectors, confidence, assignment_probs)
-
-    return components, assignment_probs
-
-def init_normal_cluster_mixture_alt(gene_vectors, confidence, assignment=None, assignment_probs=None):
-    return init_normal_cluster_mixture(gene_vectors, confidence, None, init_assignment_probs(assignment))
-
-def init_cluster_mixture(genes, confidence, n_clusters=1, components=None, assignment=None, assignment_probs=None, init_mod=10000, method='categorical'):
-    if components is not None and assignment_probs is not None:
-        return components, assignment_probs
-
-    if method == 'normal':
-        if components is None:
-            components, assignment_probs = init_normal_cluster_mixture(genes, confidence, assignment, assignment_probs)
-        else:
-            if assignment_probs is None and assignment is None:
-                raise ValueError("Either assignment or assignment_probs must be provided for method='normal'")
-            if assignment_probs is None:
-                assignment_probs = init_assignment_probs(assignment)
-    elif method == 'categorical':
-        components, assignment_probs = init_categorical_mixture(genes, components, assignment, assignment_probs, n_clusters=n_clusters, init_mod=init_mod)
-    else:
-        raise ValueError(f"Unknown method: {method}")
-
-    return components, assignment_probs
-#@profile
-def cluster_molecules_on_mrf_alt(genes, adj_list, confidence, n_clusters=1, tol=0.01, do_maximize=True, max_iters=None, 
-                             n_iters_without_update=20, components=None, assignment=None, assignment_probs=None, 
-                             verbose=False, progress=None, mrf_weight=1.0, init_mod=10000, method='categorical', **kwargs):
-
-    if max_iters is None:
-        max_iters = max(10000, len(genes) // 200)
-
-    adj_weights = [adj_list.weights[i] * confidence[adj_list.ids[i]] for i in range(len(adj_list.ids))]
-    adj_list = AdjList(adj_list.ids, adj_weights)
-    
-    components, assignment_probs = init_cluster_mixture(
-        genes, confidence, n_clusters=n_clusters, components=components, assignment=assignment, 
-        assignment_probs=assignment_probs, init_mod=init_mod, method=method
-    )
-    assignment_probs_prev = np.copy(assignment_probs)
-    cell_type_exprs = components
-    max_diffs, change_fracs = cluster_molecules_loop(assignment_probs, assignment_probs_prev, cell_type_exprs, confidence, genes, adj_list, max_iters, tol, n_iters_without_update, do_maximize, mrf_weight)
-    assignment = np.argmax(assignment_probs, 0)
-    return {'exprs': components, 'assignment': assignment, 'diffs': max_diffs, 
-            'assignment_probs': assignment_probs, 'change_fracs': change_fracs}
-
 
 ### To do
 # def filter_small_molecule_clusters(genes, confidence, adjacent_points, assignment_probs, cell_type_exprs, min_mols_per_cell, confidence_threshold=0.95):
@@ -323,29 +213,6 @@ def cluster_molecules_on_mrf_alt(genes, adj_list, confidence, n_clusters=1, tol=
 
 
 ## Utils
-
-def hash_64_64(n):
-    a = n
-    a = ~a + (a << 21) & 0xFFFFFFFFFFFFFFFF
-    a = a ^ (a >> 24)
-    a = (a + (a << 3) + (a << 8)) & 0xFFFFFFFFFFFFFFFF
-    a = a ^ (a >> 14)
-    a = (a + (a << 2) + (a << 4)) & 0xFFFFFFFFFFFFFFFF
-    a = a ^ (a >> 28)
-    a = (a + (a << 31)) & 0xFFFFFFFFFFFFFFFF
-    return a
-    
-
-def prob_array(values, max_value=None, smooth=0.0):
-    if max_value is None:
-        max_value = max(values) + 1
-
-    sum_value = len(values) + max_value * smooth
-    counts = [smooth / sum_value] * max_value
-    for v in values:
-        counts[v] += 1.0 / sum_value
-
-    return counts
 
 def position_data(df):
     if 'z' in df.columns:
@@ -393,13 +260,13 @@ def pairwise_gene_spatial_cor(genes: np.ndarray, confidence: np.ndarray, adj_lis
 
 ## Wrappers
 #@profile
-def estimate_molecule_clusters(df_spatial, n_clusters):
+def estimate_molecule_clusters(df_spatial, n_clusters, **kwargs):
     print("Clustering molecules...")
     pos_data = position_data(df_spatial).T
 
     adj_list = build_molecule_graph(pos_data)
-
-    mol_clusts = cluster_molecules_on_mrf(df_spatial, adj_list, n_clusters=n_clusters)
+    print('Enter mol clusters')
+    mol_clusts = cluster_molecules_on_mrf(df_spatial, adj_list, n_clusters=n_clusters, **kwargs)
 
     print("Done")
     return mol_clusts
