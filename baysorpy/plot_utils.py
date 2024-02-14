@@ -63,3 +63,10 @@ def plot_molecules(
         ax.set_xticks([]); ax.set_yticks([])
 
     return ax
+
+
+def rgb_to_hex(rgb_colors: np.ndarray) -> List[str]:
+    if isinstance(rgb_colors, np.matrix):
+        rgb_colors = rgb_colors.A
+    return ["#{:02X}{:02X}{:02X}".format(r[0], r[1], r[2]) for r in np.round(rgb_colors * 255).astype(int)]
+    # return [matplotlib.colors.to_hex(c) for c in rgb_colors] # This is 5 times slower
