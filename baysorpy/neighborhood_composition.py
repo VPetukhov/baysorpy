@@ -119,6 +119,27 @@ def estimate_molecule_vectors(
     return mol_vectors
 
 
+def estimate_molecule_embedding_full(mol_vectors: np.ndarray, estimator: BaseEstimator = None, train_size: int = 50000):
+    estimator = estimator or ParametricUMAP(n_components=3)
+    # select ids uniformly across the first two PCs:
+    if (train_size > 0) & (train_size < mol_vectors.shape[0]):
+        train_ids = np.argsort(mol_vectors[:,:2].sum(axis=1))[np.linspace(0, mol_vectors.shape[0] - 1, train_size, dtype=int)]
+        train_set = mol_vectors[train_ids,:]
+    else:
+        train_set = mol_vectors
+
+    estimator.fit(train_set)
+    mol_emb = estimator.transform(mol_vectors)
+    return mol_emb
+
+
+def estimate_molecule_embedding_fast(gene_vectors: np.ndarray, neighb_mat: np.ndarray, estimator: BaseEstimator = None):
+    estimator = estimator or MDS(n_components=3, n_jobs=-1, normalized_stress="auto")
+    gene_emb = estimator.fit_transform(gene_vectors)
+    mol_emb = neighb_mat.dot(gene_emb)
+    return mol_emb
+
+
 def estimate_molecule_colors(
         neighb_mat, embedding_size: int = 30, use_gene_vectors: bool = True,
         estimator: BaseEstimator = None, train_size: int = 50000, **kwargs
@@ -142,20 +163,9 @@ def estimate_molecule_colors(
     mol_vectors, gene_vectors = estimate_molecule_vectors(neighb_mat, embedding_size=embedding_size, return_gene_vectors=True)
 
     if use_gene_vectors:
-        estimator = estimator or MDS(n_components=3, n_jobs=-1, normalized_stress="auto")
-        gene_emb = estimator.fit_transform(gene_vectors)
-        mol_emb = neighb_mat.dot(gene_emb)
+        mol_emb = estimate_molecule_embedding_fast(gene_vectors, neighb_mat, estimator=estimator)
     else:
-        estimator = estimator or ParametricUMAP(n_components=3)
-        # select ids uniformly across the first two PCs:
-        if (train_size > 0) & (train_size < mol_vectors.shape[0]):
-            train_ids = np.argsort(mol_vectors[:,:2].sum(axis=1))[np.linspace(0, mol_vectors.shape[0] - 1, train_size, dtype=int)]
-            train_set = mol_vectors[train_ids,:]
-        else:
-            train_set = mol_vectors
-
-        estimator.fit(train_set)
-        mol_emb = estimator.transform(mol_vectors)
+        mol_emb = estimate_molecule_embedding_full(mol_vectors, estimator=estimator, train_size=train_size)
 
     return embedding_to_color(mol_emb, **kwargs)
 
