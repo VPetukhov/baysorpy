@@ -12,9 +12,19 @@ from typing import List, Optional
 from .baysor_wrappers import _neighborhood_count_matrix_jl
 
 
+def rgb_to_hex(rgb):
+    return '#{:02x}{:02x}{:02x}'.format(int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+
+def rgb_vec_to_hex(rgb_vec: np.ndarray) -> np.ndarray:
+    hex_colors = (rgb_vec * 255).astype(np.uint8)
+    hex_colors = [rgb_to_hex(color) for color in hex_colors]
+    return np.array(hex_colors)
+
+
 def _neighborhood_count_matrix_py(
         pos_data: np.ndarray, gene_ids: np.ndarray, k: int,
-        include_self: bool = False, n_genes: int = None, max_dist: float = -1.0, n_jobs: int = -1
+        include_self: bool = False, n_genes: Optional[int] = None, max_dist: float = -1.0, n_jobs: int = -1
     ):
     if n_genes is None:
         n_genes = np.max(gene_ids) + 1
@@ -24,13 +34,12 @@ def _neighborhood_count_matrix_py(
         adj_mat[adj_mat > max_dist] = 0
 
     nzi,nzj = adj_mat.nonzero();
-    gene_counts = Series(gene_ids[nzj]).groupby(nzi).apply(list).map(Counter)
 
-    js = np.concatenate(gene_counts.map(lambda x: list(x.keys())).values)
-    inds = np.repeat(gene_counts.index, gene_counts.map(len)).values
-    vals = np.concatenate(gene_counts.map(lambda x: list(x.values())).values)
-
-    return sparse.csc_matrix((vals, (inds, js)), shape=(pos_data.shape[0], n_genes))
+    gene_counts = sparse.csr_matrix(
+        (np.ones(len(nzi), dtype=int), (nzi, gene_ids[nzj])), 
+        shape=(pos_data.shape[0], n_genes)
+    )
+    return gene_counts
 
 
 def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int, method='py', **kwargs):
@@ -75,7 +84,7 @@ def estimate_gene_vectors(
 
     if var_clip > 0:
         # Genes that mostly co-variate with themselves don't get updated by other genes
-        # Som we clip their covariance, which greatly improves convergence
+        # So, we clip their covariance, which greatly improves convergence
         diag_vals = np.diag(coexpr_mat)
         total_var = coexpr_mat.sum(axis=0)
         diag_frac = diag_vals / total_var
@@ -133,8 +142,25 @@ def estimate_molecule_embedding_full(mol_vectors: np.ndarray, estimator: BaseEst
     return mol_emb
 
 
-def estimate_molecule_embedding_fast(gene_vectors: np.ndarray, neighb_mat: np.ndarray, estimator: BaseEstimator = None):
-    estimator = estimator or MDS(n_components=3, n_jobs=-1, normalized_stress="auto")
+def estimate_molecule_embedding_fast(
+        gene_vectors: np.ndarray, neighb_mat: np.ndarray, 
+        estimator: BaseEstimator = None, n_jobs: int = 1
+    ):
+    """
+    Estimate molecule embedding using pre-computed gene vectors.
+
+    Args:
+        gene_vectors: Gene vectors of shape (n_genes, embedding_size)
+        neighb_mat: Neighborhood count matrix of shape (n_cells, n_genes)
+        estimator: Estimator to use for embedding of gene vectors.
+                   By default, MDS is used.
+        n_jobs: Number of jobs to run in parallel. Default: 1. 
+                *On my test increasing it only slows down the computation.*
+
+    Returns:
+        Molecule embedding of shape (n_cells, 3)
+    """
+    estimator = estimator or MDS(n_components=3, n_jobs=n_jobs, normalized_stress="auto")
     gene_emb = estimator.fit_transform(gene_vectors)
     mol_emb = neighb_mat.dot(gene_emb)
     return mol_emb
@@ -142,7 +168,7 @@ def estimate_molecule_embedding_fast(gene_vectors: np.ndarray, neighb_mat: np.nd
 
 def estimate_molecule_colors(
         neighb_mat, embedding_size: int = 30, use_gene_vectors: bool = True,
-        estimator: BaseEstimator = None, train_size: int = 50000, **kwargs
+        estimator: BaseEstimator = None, train_size: int = 50000, verbose: bool = False, **kwargs
     ):
     """
     Estimate molecule colors from the neighborhood count matrix.
@@ -160,12 +186,24 @@ def estimate_molecule_colors(
         **kwargs: Additional arguments to pass to the color space conversion function
     """
 
+    if verbose:
+        print("Estimating molecule vectors...")
+
     mol_vectors, gene_vectors = estimate_molecule_vectors(neighb_mat, embedding_size=embedding_size, return_gene_vectors=True)
 
     if use_gene_vectors:
+        if verbose:
+            print("Estimating molecule embedding using gene vectors...")
+
         mol_emb = estimate_molecule_embedding_fast(gene_vectors, neighb_mat, estimator=estimator)
     else:
+        if verbose:
+            print("Estimating molecule embedding using molecule vectors...")
+
         mol_emb = estimate_molecule_embedding_full(mol_vectors, estimator=estimator, train_size=train_size)
+
+    if verbose:
+        print("Converting embedding to colors...")
 
     return embedding_to_color(mol_emb, **kwargs)
 

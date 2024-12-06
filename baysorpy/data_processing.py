@@ -111,7 +111,7 @@ def find_false_positive_molecules(
         If return_dists is True, returns a tuple with the boolean array and the estimated distances (neg_prob_dists, gene_dists, all_dists).
     """
     min_mols_per_gene = df_spatial.gene.value_counts().min()
-    if min_mols_per_gene < k:
+    if min_mols_per_gene <= k:
         print(f"Warning: some genes have less than {k} molecules, setting k to {min_mols_per_gene - 1}")
         k = min_mols_per_gene - 1
 
