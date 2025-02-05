@@ -80,7 +80,7 @@ def estimate_gene_vectors(
 
     coexpr_mat = neighb_mat.T.dot(neighb_mat)
     if not isinstance(coexpr_mat, np.ndarray):
-        coexpr_mat = coexpr_mat.A
+        coexpr_mat = coexpr_mat.toarray()
 
     if var_clip > 0:
         # Genes that mostly co-variate with themselves don't get updated by other genes
