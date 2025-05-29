@@ -42,7 +42,7 @@ def _neighborhood_count_matrix_py(
     return gene_counts
 
 
-def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int, method='py', **kwargs):
+def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int, method='py', n_jobs = 1, **kwargs):
     """
     Compute the neighborhood count matrix for a given set of spatial coordinates and gene ids.
 
@@ -53,10 +53,10 @@ def neighborhood_count_matrix(pos_data: np.ndarray, gene_ids: np.ndarray, k: int
         method: python ('py') or Julia ('jl') implementation. The later is ~5 times faster, but requires JuliaCall.
     """
     if method == 'py':
-        return _neighborhood_count_matrix_py(pos_data, gene_ids, k, **kwargs)
+        return _neighborhood_count_matrix_py(pos_data, gene_ids, k, n_jobs, **kwargs)
 
     if method == 'jl':
-        return _neighborhood_count_matrix_jl(pos_data, gene_ids, k, **kwargs)
+        return _neighborhood_count_matrix_jl(pos_data, gene_ids, k, n_jobs, **kwargs)
 
     raise ValueError(f"Method {method} not found. Please choose from ['py', 'jl']")
 
