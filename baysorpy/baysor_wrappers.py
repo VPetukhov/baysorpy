@@ -59,7 +59,7 @@ def _neighborhood_count_matrix_jl(
         n_genes = np.max(gene_ids) + 1
 
     neighb_mat = bpr.neighborhood_count_matrix(
-        jl.Matrix(pos_data.T), jl.Vector(gene_ids + 1), k, normalize=normalize,
+        jl.Matrix(pos_data.T.astype(np.float64)), jl.Vector(gene_ids + 1), k, normalize=normalize,
         n_genes=n_genes, **kwargs
     )
 
